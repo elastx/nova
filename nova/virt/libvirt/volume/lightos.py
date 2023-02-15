@@ -49,14 +49,15 @@ class LibvirtLightOSVolumeDriver(libvirt_volume.LibvirtVolumeDriver):
         conf.driver_io = "native"
         return conf
 
-    def disconnect_volume(self, connection_info, instance):
+    def disconnect_volume(self, connection_info, instance, force=False):
         """Detach the volume from the instance."""
         LOG.debug("Disconnecting NVMe disk. instance:%s, volume_id:%s",
                   connection_info.get("instance", ""),
                   connection_info.get("volume_id", ""))
-        self.connector.disconnect_volume(connection_info['data'], None)
+        self.connector.disconnect_volume(
+            connection_info['data'], None, force=force)
         super(LibvirtLightOSVolumeDriver, self).disconnect_volume(
-            connection_info, instance)
+            connection_info, instance, force=force)
 
     def extend_volume(self, connection_info, instance, requested_size=None):
         """Extend the volume."""
