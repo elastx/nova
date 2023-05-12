@@ -8874,7 +8874,7 @@ class LibvirtConnTestCase(test.NoDBTestCase,
         drvr._disconnect_volume(
             self.context, fake_connection_info, fake_instance_1)
         mock_volume_driver.disconnect_volume.assert_called_once_with(
-            fake_connection_info, fake_instance_1)
+            fake_connection_info, fake_instance_1, force=False)
 
     @mock.patch.object(libvirt_driver.LibvirtDriver, '_detach_encryptor')
     @mock.patch('nova.objects.InstanceList.get_uuids_by_host')
@@ -9308,7 +9308,7 @@ class LibvirtConnTestCase(test.NoDBTestCase,
         mock_order.assert_has_calls([
             mock.call.detach_volume(),
             mock.call.detach_encryptor(**encryption),
-            mock.call.disconnect_volume(connection_info, instance)])
+            mock.call.disconnect_volume(connection_info, instance, force=True)])
 
     def test_extend_volume(self):
         drvr = libvirt_driver.LibvirtDriver(fake.FakeVirtAPI(), False)
@@ -14082,9 +14082,9 @@ class LibvirtConnTestCase(test.NoDBTestCase,
         # Assert disconnect_volume is called twice despite the exception
         mock_disconnect_volume.assert_has_calls([
             mock.call(mock.sentinel.ctxt, vol_1_conn_info,
-                      mock.sentinel.instance),
+                      mock.sentinel.instance, force=True),
             mock.call(mock.sentinel.ctxt, vol_2_conn_info,
-                      mock.sentinel.instance)])
+                      mock.sentinel.instance, force=True)])
 
         # Assert that we log the failure to disconnect the first volume
         self.assertIn("Ignoring exception while attempting to disconnect "
@@ -19276,6 +19276,52 @@ class LibvirtConnTestCase(test.NoDBTestCase,
         self.assertEqual(1, int(instance.system_metadata['clean_attempts']))
         self.assertTrue(instance.cleaned)
         save.assert_called_once_with()
+
+    @mock.patch('nova.virt.libvirt.driver.LibvirtDriver._get_volume_driver')
+    @mock.patch(
+        'nova.virt.libvirt.driver.LibvirtDriver._should_disconnect_target',
+        new=mock.Mock(return_value=True))
+    @mock.patch('nova.virt.libvirt.driver.LibvirtDriver._detach_encryptor',
+                new=mock.Mock())
+    @mock.patch('nova.virt.libvirt.driver.LibvirtDriver._undefine_domain',
+                new=mock.Mock())
+    @mock.patch('nova.virt.libvirt.driver.LibvirtDriver._get_vpmems',
+                new=mock.Mock(return_value=None))
+    def test_cleanup_disconnect_volume(self, mock_vol_driver):
+        """Verify that we call disconnect_volume() with force=True
+
+        cleanup() is called by destroy() when an instance is being deleted and
+        force=True should be passed down to os-brick's disconnect_volume()
+        call, which will ensure removal of devices regardless of errors.
+
+        We need to ensure that devices are removed when an instance is being
+        deleted to avoid leaving leftover devices that could later be
+        erroneously connected by external entities (example: multipathd) to
+        instances that should not have access to the volumes.
+
+        See https://bugs.launchpad.net/nova/+bug/2004555 for details.
+        """
+        connection_info = mock.MagicMock()
+        block_device_info = {
+            'block_device_mapping': [
+                {
+                    'connection_info': connection_info
+                }
+            ]
+        }
+        instance = objects.Instance(self.context, **self.test_instance)
+        drvr = libvirt_driver.LibvirtDriver(fake.FakeVirtAPI())
+
+        drvr.cleanup(
+            self.context,
+            instance,
+            network_info={},
+            block_device_info=block_device_info,
+            destroy_vifs=False,
+            destroy_disks=False,
+        )
+        mock_vol_driver.return_value.disconnect_volume.assert_called_once_with(
+            connection_info, instance, force=True)
 
     @mock.patch.object(libvirt_driver.LibvirtDriver, '_get_volume_encryption')
     @mock.patch.object(libvirt_driver.LibvirtDriver, '_allow_native_luksv1')

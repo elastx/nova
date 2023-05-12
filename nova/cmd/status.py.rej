@@ -1,0 +1,10 @@
+diff a/nova/cmd/status.py b/nova/cmd/status.py	(rejected hunks)
+@@ -350,6 +359,8 @@ https://docs.openstack.org/latest/nova/admin/hw_machine_type.html"""))
+         (_('Older than N-1 computes'), _check_old_computes),
+         # Added in Wallaby
+         (_('hw_machine_type unset'), _check_machine_type_set),
++        # Added in Bobcat
++        (_('Service User Token Configuration'), _check_service_user_token),
+     )
+ 
+ 

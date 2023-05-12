@@ -57,7 +57,13 @@ class LibvirtNVMEVolumeDriverTestCase(test_volume.LibvirtVolumeBaseTestCase):
         connection_info = {'data': disk_info}
         nvme_con.disconnect_volume(connection_info, None)
         nvme_con.connector.disconnect_volume.assert_called_once_with(
-            disk_info, None)
+            disk_info, None, force=False)
+
+        # Verify force=True
+        nvme_con.connector.disconnect_volume.reset_mock()
+        nvme_con.disconnect_volume(connection_info, None, force=True)
+        nvme_con.connector.disconnect_volume.assert_called_once_with(
+            disk_info, None, force=True)
 
     def test_libvirt_nvme_driver_get_config(self):
         nvme_driver = nvme.LibvirtNVMEVolumeDriver(self.fake_host)

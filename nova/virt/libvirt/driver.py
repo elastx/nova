@@ -1443,7 +1443,7 @@ class LibvirtDriver(driver.ComputeDriver):
             if disk_dev is not None:
                 disk_dev = disk_dev.rpartition("/")[2]
             try:
-                self._disconnect_volume(context, connection_info, instance)
+                self._disconnect_volume(context, connection_info, instance, force=True)
             except Exception as exc:
                 with excutils.save_and_reraise_exception() as ctxt:
                     if cleanup_instance_disks:
@@ -1667,11 +1667,11 @@ class LibvirtDriver(driver.ComputeDriver):
         return (False if connection_count > 1 else True)
 
     def _disconnect_volume(self, context, connection_info, instance,
-                           encryption=None):
+                           encryption=None, force=False):
         self._detach_encryptor(context, connection_info, encryption=encryption)
         if self._should_disconnect_target(context, connection_info, instance):
             vol_driver = self._get_volume_driver(connection_info)
-            vol_driver.disconnect_volume(connection_info, instance)
+            vol_driver.disconnect_volume(connection_info, instance, force=force)
         else:
             LOG.info("Detected multiple connections on this host for volume: "
                      "%s, skipping target disconnect.",

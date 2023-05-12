@@ -47,7 +47,13 @@ class LibvirtScaleIOVolumeDriverTestCase(
         conn = {'data': mock.sentinel.conn_data}
         sio.disconnect_volume(conn, mock.sentinel.instance)
         sio.connector.disconnect_volume.assert_called_once_with(
-            mock.sentinel.conn_data, None)
+            mock.sentinel.conn_data, None, force=False)
+
+        # Verify force=True
+        sio.connector.disconnect_volume.reset_mock()
+        sio.disconnect_volume(conn, mock.sentinel.instance, force=True)
+        sio.connector.disconnect_volume.assert_called_once_with(
++            mock.sentinel.conn_data, None, force=True)
 
     def test_libvirt_scaleio_driver_extend_volume(self):
         def brick_extend_vol(data):
