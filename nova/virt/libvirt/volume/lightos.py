@@ -42,6 +42,13 @@ class LibvirtLightOSVolumeDriver(libvirt_volume.LibvirtVolumeDriver):
         LOG.debug("Connecting NVMe volume with device_info %s", device_info)
         connection_info['data']['device_path'] = device_info['path']
 
+    def get_config(self, connection_info, disk_info):
+        """Returns xml for libvirt."""
+        conf = super(LibvirtLightOSVolumeDriver,
+                     self).get_config(connection_info, disk_info)
+        conf.driver_io = "native"
+        return conf
+
     def disconnect_volume(self, connection_info, instance):
         """Detach the volume from the instance."""
         LOG.debug("Disconnecting NVMe disk. instance:%s, volume_id:%s",
