@@ -141,8 +141,8 @@ LOG = logging.getLogger(__name__)
 CONF = nova.conf.CONF
 
 DEFAULT_UEFI_LOADER_PATH = {
-    "x86_64": ['/usr/share/OVMF/OVMF_CODE.fd',
-               '/usr/share/OVMF/OVMF_CODE.secboot.fd',
+    "x86_64": ['/usr/share/OVMF/OVMF_CODE_4M.fd',
+               '/usr/share/OVMF/OVMF_CODE_4M.secboot.fd',
                '/usr/share/qemu/ovmf-x86_64-code.bin'],
     "aarch64": ['/usr/share/AAVMF/AAVMF_CODE.fd',
                 '/usr/share/qemu/aavmf-aarch64-code.bin']
