@@ -2767,16 +2767,24 @@ class LibvirtDriver(driver.ComputeDriver):
                       requested_size):
         volume_id = driver_block_device.get_volume_id(connection_info)
         try:
-            new_size = self._extend_volume(
-                connection_info, instance, requested_size)
+            # NOTE(jhindersson): Handle race condition where volume extension
+            # takes a long time before being detected on the host
+            attempts = 0
+            while True:
+                new_size = self._extend_volume(
+                    connection_info, instance, requested_size)
+                if new_size == requested_size:
+                    break
+                # NOTE(lyarwood): Handle cases where os-brick has ignored failures
+                # and returned an invalid new_size of None through the vol drivers
+                if new_size is None or attempts == 60:
+                    raise exception.VolumeExtendFailed(
+                        volume_id=volume_id,
+                        reason="Failure to resize underlying volume on compute."
+                    )
+                attempts += 1
+                time.sleep(1)
 
-            # NOTE(lyarwood): Handle cases where os-brick has ignored failures
-            # and returned an invalid new_size of None through the vol drivers
-            if new_size is None:
-                raise exception.VolumeExtendFailed(
-                    volume_id=volume_id,
-                    reason="Failure to resize underlying volume on compute."
-                )
 
         except NotImplementedError:
             raise exception.ExtendVolumeNotSupported()
