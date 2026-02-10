@@ -1296,8 +1296,11 @@ class ComputeManager(manager.Manager):
 
         db_state = instance.power_state
         drv_state = self._get_power_state(instance)
+        tag_state = False
+        if "autostart_instance_on_host_failure" in instance.tags:
+          tag_state = True
         expect_running = (db_state == power_state.RUNNING and
-                          drv_state != db_state)
+                          drv_state != db_state and tag_state)
 
         LOG.debug('Current state is %(drv_state)s, state in DB is '
                   '%(db_state)s.',
