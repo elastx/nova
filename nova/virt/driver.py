@@ -625,6 +625,28 @@ class ComputeDriver(object):
         """
         raise NotImplementedError()
 
+    def update_volume_qos(self, context, connection_info, instance):
+        """Apply updated front-end QoS settings to an attached volume.
+
+        Called after a Cinder volume retype that changes front-end QoS.  The
+        driver should apply the new iotune parameters from
+        ``connection_info['data']['qos_specs']`` to the running domain without
+        detaching the volume.
+
+        Drivers that implement this method must also advertise
+        ``supports_qos_update: True`` in their capabilities dict.
+
+        :param context: The request context.
+        :param dict connection_info:
+            Updated connection info containing the new qos_specs under the
+            ``data`` key.
+        :param nova.objects.instance.Instance instance:
+            The instance whose volume QoS is being updated.
+
+        :return: None
+        """
+        raise NotImplementedError()
+
     def prepare_networks_before_block_device_mapping(self, instance,
                                                      network_info):
         """Prepare networks before the block devices are mapped to instance.

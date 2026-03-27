@@ -360,6 +360,10 @@ class FakeDriver(driver.ComputeDriver):
         """Extend the disk attached to the instance."""
         pass
 
+    def update_volume_qos(self, context, connection_info, instance):
+        """Apply updated front-end QoS to an attached volume."""
+        pass
+
     def attach_interface(self, context, instance, image_meta, vif):
         if vif['id'] in self._interfaces:
             raise exception.InterfaceAttachFailed(

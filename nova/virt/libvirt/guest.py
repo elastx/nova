@@ -472,6 +472,19 @@ class Guest(object):
         """Returns a block device wrapper for disk."""
         return BlockDevice(self, disk)
 
+    def set_block_io_tune(self, disk, params, persistent=False, live=False):
+        """Set I/O throttle parameters for a disk via virDomainSetBlockIoTune.
+
+        :param disk: target device name as seen by the guest, e.g. ``vda``
+        :param params: dict mapping iotune parameter names to integer values;
+            a value of 0 means unlimited for that parameter
+        :param persistent: if True, also update the persistent (inactive) XML
+        :param live: if True, apply to the running domain immediately
+        """
+        flags = persistent and libvirt.VIR_DOMAIN_AFFECT_CONFIG or 0
+        flags |= live and libvirt.VIR_DOMAIN_AFFECT_LIVE or 0
+        self._domain.blockIoTune(disk, params, flags)
+
     def set_user_password(self, user, new_pass):
         """Configures a new user password."""
         self._domain.setUserPassword(user, new_pass, 0)

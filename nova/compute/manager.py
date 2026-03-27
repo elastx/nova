@@ -1303,8 +1303,8 @@ class ComputeManager(manager.Manager):
                           drv_state != db_state and tag_state)
 
         LOG.debug('Current state is %(drv_state)s, state in DB is '
-                  '%(db_state)s.',
-                  {'drv_state': drv_state, 'db_state': db_state},
+                  '%(db_state)s. Instance autostart tag state: %(tag_state)s',
+                  {'drv_state': drv_state, 'db_state': db_state, 'tag_state': tag_state},
                   instance=instance)
 
         if expect_running and CONF.resume_guests_state_on_host_boot:
@@ -10587,6 +10587,62 @@ class ComputeManager(manager.Manager):
                         instance=instance)
             raise
 
+    @wrap_exception()
+    @wrap_instance_event(prefix='compute')
+    @wrap_instance_fault
+    def update_volume_qos(self, context, instance, updated_volume_id):
+        """Apply updated front-end QoS to a volume attached to an instance.
+
+        Called when Cinder retyped a volume to a new front-end QoS profile.
+        Retrieves the new connection_info (which includes the updated qos_specs)
+        from Cinder and delegates to the virt driver to apply the new iotune
+        settings to the running domain.
+        """
+        LOG.debug('Handling volume-qos-updated event for volume %(vol)s',
+                  {'vol': updated_volume_id}, instance=instance)
+
+        try:
+            bdm = objects.BlockDeviceMapping.get_by_volume_and_instance(
+                context, updated_volume_id, instance.uuid)
+        except exception.NotFound:
+            LOG.warning('Update volume QoS failed, volume %(vol)s is not '
+                        'attached to instance.',
+                        {'vol': updated_volume_id}, instance=instance)
+            return
+
+        if bdm.attachment_id is None:
+            LOG.warning('Update volume QoS skipped for volume %(vol)s: '
+                        'no attachment_id (old-style attachment).',
+                        {'vol': updated_volume_id}, instance=instance)
+            return
+
+        if not self.driver.capabilities.get('supports_qos_update', False):
+            LOG.debug('Virt driver does not support live QoS updates, '
+                      'skipping for volume %s.', updated_volume_id,
+                      instance=instance)
+            return
+
+        # Fetch the attachment from Cinder, which now holds the updated
+        # connection_info (including the new qos_specs after retype).
+        attachment = self.volume_api.attachment_get(context, bdm.attachment_id)
+        connection_info = attachment['connection_info']
+
+        LOG.info('Applying updated QoS for volume %(vol)s',
+                 {'vol': updated_volume_id}, instance=instance)
+
+        try:
+            self.driver.update_volume_qos(context, connection_info, instance)
+        except Exception as ex:
+            LOG.warning('Failed to apply QoS update for volume %(vol)s: '
+                        '%(msg)s',
+                        {'vol': updated_volume_id, 'msg': ex},
+                        instance=instance)
+            raise
+
+        # Persist the updated connection_info (with new qos_specs) in the BDM.
+        bdm.connection_info = jsonutils.dumps(connection_info)
+        bdm.save()
+
     @staticmethod
     def _is_state_valid_for_power_update_event(instance, target_power_state):
         """Check if the current state of the instance allows it to be
@@ -10722,6 +10778,8 @@ class ComputeManager(manager.Manager):
                              instance=instance)
             elif event.name == 'volume-extended':
                 self.extend_volume(context, instance, event.tag)
+            elif event.name == 'volume-qos-updated':
+                self.update_volume_qos(context, instance, event.tag)
             elif event.name == 'power-update':
                 self.power_update(context, instance, event.tag)
             else:

@@ -416,6 +416,7 @@ class LibvirtDriver(driver.ComputeDriver):
             "supports_tagged_attach_interface": True,
             "supports_tagged_attach_volume": True,
             "supports_extend_volume": True,
+            "supports_qos_update": True,
             "supports_multiattach": True,
             "supports_trusted_certs": True,
             # Supported image types
@@ -2830,6 +2831,64 @@ class LibvirtDriver(driver.ComputeDriver):
             with excutils.save_and_reraise_exception():
                 LOG.exception('resizing block device failed.',
                               instance=instance)
+
+    def update_volume_qos(self, context, connection_info, instance):
+        """Apply updated front-end QoS to a running domain via blockIoTune.
+
+        Reads the new ``qos_specs`` from ``connection_info['data']`` and
+        calls ``virDomainSetBlockIoTune`` on the disk belonging to the volume
+        without detaching or migrating it.
+        """
+        volume_id = driver_block_device.get_volume_id(connection_info)
+        qos_specs = connection_info.get('data', {}).get('qos_specs') or {}
+
+        try:
+            guest = self._host.get_guest(instance)
+            state = guest.get_power_state(self._host)
+            if state not in (power_state.RUNNING, power_state.PAUSED):
+                LOG.debug('Skipping QoS update for volume %s, guest is not '
+                          'running.', volume_id, instance=instance)
+                return
+
+            # Locate the target device name for this volume.
+            if 'device_path' in connection_info.get('data', {}):
+                disk_dev = connection_info['data']['device_path']
+            else:
+                disk = next(
+                    (d for d in guest.get_all_disks()
+                     if d.serial == volume_id),
+                    None)
+                if not disk:
+                    raise exception.VolumeNotFound(volume_id=volume_id)
+                disk_dev = disk.target_dev
+
+            # Build the blockIoTune parameter dict; 0 means unlimited.
+            tune_opts = [
+                'total_bytes_sec', 'read_bytes_sec', 'write_bytes_sec',
+                'total_iops_sec', 'read_iops_sec', 'write_iops_sec',
+                'read_bytes_sec_max', 'write_bytes_sec_max',
+                'total_bytes_sec_max', 'read_iops_sec_max',
+                'write_iops_sec_max', 'total_iops_sec_max',
+                'size_iops_sec',
+            ]
+            params = {opt: int(qos_specs.get(opt, 0)) for opt in tune_opts}
+
+            LOG.debug('Updating iotune for volume %(vol)s on device %(dev)s '
+                      'with params %(params)s',
+                      {'vol': volume_id, 'dev': disk_dev, 'params': params},
+                      instance=instance)
+
+            guest.set_block_io_tune(disk_dev, params, persistent=True,
+                                    live=True)
+
+        except exception.InstanceNotFound:
+            with excutils.save_and_reraise_exception():
+                LOG.warning('During update_volume_qos, instance disappeared.',
+                            instance=instance)
+        except libvirt.libvirtError:
+            with excutils.save_and_reraise_exception():
+                LOG.exception('blockIoTune failed for volume %s.',
+                              volume_id, instance=instance)
 
     def attach_interface(self, context, instance, image_meta, vif):
         guest = self._host.get_guest(instance)
