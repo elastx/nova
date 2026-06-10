@@ -1529,7 +1529,7 @@ class ComputeManager(manager.Manager):
         context = nova.context.get_admin_context()
         instances = objects.InstanceList.get_by_host(
             context, self.host,
-            expected_attrs=['info_cache', 'metadata', 'numa_topology'])
+            expected_attrs=['info_cache', 'metadata', 'numa_topology', 'tags'])
 
         self.init_virt_events()
 
