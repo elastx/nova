@@ -1486,31 +1486,31 @@ class Host(object):
         nodedev = self.get_vdpa_nodedev_by_address(pci_address)
         return nodedev.vdpa_capability.dev_path
 
-    def list_pci_devices(self, flags=0):
+    def list_pci_devices(self, flags: int = 0) -> ty.List[str]:
         """Lookup pci devices.
 
-        :returns: a list of virNodeDevice instance
+        :returns: a list of strings, names of the virNodeDevice instances
         """
         return self._list_devices("pci", flags=flags)
 
-    def list_mdev_capable_devices(self, flags=0):
+    def list_mdev_capable_devices(self, flags: int = 0) -> ty.List[str]:
         """Lookup devices supporting mdev capabilities.
 
-        :returns: a list of virNodeDevice instance
+        :returns: a list of strings, names of the virNodeDevice instances
         """
         return self._list_devices("mdev_types", flags=flags)
 
-    def list_mediated_devices(self, flags=0):
+    def list_mediated_devices(self, flags: int = 0) -> ty.List[str]:
         """Lookup mediated devices.
 
-        :returns: a list of strings with the name of the instance
+        :returns: a list of strings, names of the virNodeDevice instances
         """
         return self._list_devices("mdev", flags=flags)
 
-    def _list_devices(self, cap, flags=0):
+    def _list_devices(self, cap, flags: int = 0) -> ty.List[str]:
         """Lookup devices.
 
-        :returns: a list of virNodeDevice instance
+        :returns: a list of strings, names of the virNodeDevice instances
         """
         try:
             return self.get_connection().listDevices(cap, flags)
@@ -1533,7 +1533,10 @@ class Host(object):
         :returns: a list of virNodeDevice xml strings.
         """
         try:
-            return self.get_connection().listAllDevices(flags) or []
+            alldevs = [
+                self._wrap_libvirt_proxy(dev)
+                for dev in self.get_connection().listAllDevices(flags)] or []
+            return alldevs
         except libvirt.libvirtError as ex:
             LOG.warning(ex)
             return []
