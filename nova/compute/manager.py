@@ -1296,9 +1296,8 @@ class ComputeManager(manager.Manager):
 
         db_state = instance.power_state
         drv_state = self._get_power_state(instance)
-        tag_state = False
-        if "autostart_instance_on_host_failure" in instance.tags:
-          tag_state = True
+        tag_state = "autostart_instance_on_host_failure" in (
+            [tag.tag for tag in instance.tags])
         expect_running = (db_state == power_state.RUNNING and
                           drv_state != db_state and tag_state)
 
@@ -1530,7 +1529,7 @@ class ComputeManager(manager.Manager):
         context = nova.context.get_admin_context()
         instances = objects.InstanceList.get_by_host(
             context, self.host,
-            expected_attrs=['info_cache', 'metadata', 'numa_topology'])
+            expected_attrs=['info_cache', 'metadata', 'numa_topology', 'tags'])
 
         self.init_virt_events()
 

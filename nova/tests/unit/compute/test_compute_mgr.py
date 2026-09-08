@@ -1544,6 +1544,10 @@ class ComputeManagerUnitTestCase(test.NoDBTestCase,
                 task_state=None,
                 host=self.compute.host,
                 expected_attrs=['info_cache'])
+        # Resume on host boot is gated on the autostart tag, so the instance
+        # must carry it to reach the resume path being exercised here.
+        instance.tags = objects.TagList(
+            objects=[objects.Tag(tag='autostart_instance_on_host_failure')])
 
         self.flags(resume_guests_state_on_host_boot=True)
         mock_get_power.side_effect = (power_state.SHUTDOWN,
@@ -1558,6 +1562,66 @@ class ComputeManagerUnitTestCase(test.NoDBTestCase,
         mock_resume.assert_called_once_with(mock.ANY, instance, mock.ANY,
                                             'fake-bdm')
         mock_set_inst.assert_called_once_with(instance)
+
+    @mock.patch.object(manager.ComputeManager, '_get_power_state')
+    @mock.patch.object(fake_driver.FakeDriver, 'plug_vifs')
+    @mock.patch.object(fake_driver.FakeDriver, 'resume_state_on_host_boot')
+    @mock.patch.object(manager.ComputeManager,
+                       '_get_instance_block_device_info')
+    def test_init_instance_resumes_tagged_instance(
+            self, mock_get_inst, mock_resume, mock_plug, mock_get_power):
+        # An instance carrying the autostart_instance_on_host_failure tag that
+        # was running but is now down must be resumed on host boot.
+        instance = fake_instance.fake_instance_obj(
+                self.context,
+                uuid=uuids.instance,
+                info_cache=None,
+                power_state=power_state.RUNNING,
+                vm_state=vm_states.ACTIVE,
+                task_state=None,
+                host=self.compute.host,
+                expected_attrs=['info_cache'])
+        instance.tags = objects.TagList(
+            objects=[objects.Tag(tag='autostart_instance_on_host_failure')])
+
+        self.flags(resume_guests_state_on_host_boot=True)
+        mock_get_power.side_effect = (power_state.SHUTDOWN,
+                                      power_state.SHUTDOWN)
+        mock_get_inst.return_value = 'fake-bdm'
+
+        self.compute._init_instance('fake-context', instance)
+
+        mock_resume.assert_called_once_with(mock.ANY, instance, mock.ANY,
+                                            'fake-bdm')
+
+    @mock.patch.object(manager.ComputeManager, '_get_power_state')
+    @mock.patch.object(fake_driver.FakeDriver, 'plug_vifs')
+    @mock.patch.object(fake_driver.FakeDriver, 'resume_state_on_host_boot')
+    @mock.patch.object(manager.ComputeManager,
+                       '_get_instance_block_device_info')
+    def test_init_instance_does_not_resume_untagged_instance(
+            self, mock_get_inst, mock_resume, mock_plug, mock_get_power):
+        # Without the autostart_instance_on_host_failure tag an instance must
+        # not be resumed, even if it was running before the host went down.
+        instance = fake_instance.fake_instance_obj(
+                self.context,
+                uuid=uuids.instance,
+                info_cache=None,
+                power_state=power_state.RUNNING,
+                vm_state=vm_states.ACTIVE,
+                task_state=None,
+                host=self.compute.host,
+                expected_attrs=['info_cache'])
+        instance.tags = objects.TagList(objects=[])
+
+        self.flags(resume_guests_state_on_host_boot=True)
+        mock_get_power.side_effect = (power_state.SHUTDOWN,
+                                      power_state.SHUTDOWN)
+        mock_get_inst.return_value = 'fake-bdm'
+
+        self.compute._init_instance('fake-context', instance)
+
+        mock_resume.assert_not_called()
 
     @mock.patch.object(objects.BlockDeviceMapping, 'destroy')
     @mock.patch.object(objects.BlockDeviceMappingList, 'get_by_instance_uuid')
